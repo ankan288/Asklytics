@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "build:prod": "NODE_ENV=production next build",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "export": "next export"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
