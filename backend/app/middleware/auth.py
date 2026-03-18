@@ -6,6 +6,7 @@ import logging
 import jwt
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
 from app.services.auth_service import AuthService
 from app.config import get_settings
 
@@ -55,9 +56,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Validate header format
         if not auth_header or not auth_header.startswith("Bearer "):
             logger.warning(f"Missing or invalid auth header for {request.url.path}")
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid authorization header",
+                content={"detail": "Missing or invalid authorization header"},
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -84,9 +85,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     return response
             except jwt.ExpiredSignatureError:
                 logger.warning("Supabase token expired")
-                raise HTTPException(
+                return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token expired",
+                    content={"detail": "Token expired"},
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             except jwt.InvalidTokenError as e:
@@ -106,16 +107,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         except ValueError as e:
             logger.warning(f"Token validation failed: {e}")
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=str(e),
+                content={"detail": str(e)},
                 headers={"WWW-Authenticate": "Bearer"},
             )
         except Exception as e:
             logger.error(f"Unexpected auth error: {e}")
-            raise HTTPException(
+            return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication failed",
+                content={"detail": "Authentication failed"},
             )
 
         # Process request
