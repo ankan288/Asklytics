@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Database
     db_path: str = "./sample.db"  # Keep for local development
-    sample_csv_path: str = r"D:\gfg\7. Amazon Sales\Amazon Sales.csv"
+    sample_csv_path: str = ""
     postgres_url: Optional[str] = None  # Required for production: postgresql://user:pass@host:5432/dbname
 
     # Production database flag

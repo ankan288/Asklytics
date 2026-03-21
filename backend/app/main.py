@@ -54,3 +54,7 @@ app.include_router(upload.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+# Auto-reload trigger
+
+# Reloading for new Groq API key

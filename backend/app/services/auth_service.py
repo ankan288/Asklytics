@@ -180,9 +180,9 @@ class AuthService:
                 algorithms=[settings.jwt_algorithm]
             )
 
-            # Verify token type
+            # Verify token type (Supabase JWTs do not have a 'type' claim)
             token_type_from_payload = payload.get("type")
-            if token_type_from_payload != token_type:
+            if token_type_from_payload and token_type_from_payload != token_type:
                 logger.warning(f"Invalid token type: expected {token_type}, got {token_type_from_payload}")
                 return None
 

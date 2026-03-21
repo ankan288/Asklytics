@@ -1,10 +1,11 @@
 export interface ChartSpec {
   id: string;
-  type: "line" | "bar" | "pie" | "area" | "kpi";
+  type: "line" | "bar" | "pie" | "area" | "kpi" | "scatter" | "heatmap" | "histogram";
   title: string;
   data: Record<string, unknown>[];
   x_key?: string;
   y_keys: string[];
+  z_key?: string;
   color_palette: string[];
 }
 

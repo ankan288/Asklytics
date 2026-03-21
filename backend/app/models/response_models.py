@@ -9,6 +9,7 @@ class ChartSpec(BaseModel):
     data: List[Dict[str, Any]] = []
     x_key: Optional[str] = None
     y_keys: List[str] = []
+    z_key: Optional[str] = None
     color_palette: List[str] = []
 
 

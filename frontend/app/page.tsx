@@ -55,7 +55,7 @@ export default function LandingPage() {
             </h1>
 
             <p className="text-lg md:text-xl text-white/70 mb-12 leading-relaxed">
-              Transform your data into actionable insights with AI-powered analytics. Ask questions in plain English, get instant dashboards.
+              No SQL. No code. Just ask.
             </p>
 
             <motion.div
@@ -71,10 +71,10 @@ export default function LandingPage() {
                 Get Started
               </button>
               <button
-                onClick={() => router.push('/login')}
+                onClick={() => router.push('/dashboard')}
                 className="px-8 py-3 border border-white/30 text-white font-semibold rounded-lg hover:bg-white/10 backdrop-blur transition"
               >
-                Learn More
+                Demo
               </button>
             </motion.div>
           </motion.div>

@@ -13,7 +13,7 @@ async def upload_csv(file: UploadFile = File(...)):
     if len(content) > 50 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 50 MB).")
     try:
-        result = csv_service.process_csv(content, file.filename)
+        result = await csv_service.process_csv(content, file.filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

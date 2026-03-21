@@ -6,18 +6,44 @@ logger = logging.getLogger(__name__)
 TABLE_NAME = "amazon_sales"
 
 
+def _expand_csv_candidate(path: str) -> list[str]:
+    if not path:
+        return []
+
+    cleaned = path.strip().strip('"').strip("'")
+    expanded = os.path.expandvars(os.path.expanduser(cleaned))
+    candidates = [expanded]
+
+    # Accept either a direct CSV path or a directory containing the CSV.
+    if os.path.isdir(expanded):
+        candidates.extend([
+            os.path.join(expanded, "Amazon Sales.csv"),
+            os.path.join(expanded, "amazon_sales.csv"),
+        ])
+
+    return candidates
+
+
 def _find_csv() -> str:
     s = get_settings()
-    candidates = [
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    raw_candidates = [
         s.sample_csv_path,
-        r"D:\gfg\7. Amazon Sales\Amazon Sales.csv",
-        "/d/gfg/7. Amazon Sales/Amazon Sales.csv",
-        os.path.join(os.path.dirname(__file__), "..", "..", "data", "amazon_sales.csv"),
+        os.path.join(project_root, "7. Amazon Sales", "Amazon Sales.csv"),
+        os.path.join(project_root, "7. Amazon Sales"),
+        os.path.join(backend_root, "data", "amazon_sales.csv"),
     ]
-    for p in candidates:
-        if p and os.path.exists(p):
-            return p
-    raise FileNotFoundError("Amazon Sales CSV not found. Set SAMPLE_CSV_PATH in .env")
+
+    for raw in raw_candidates:
+        for candidate in _expand_csv_candidate(raw):
+            if os.path.isfile(candidate):
+                return candidate
+
+    raise FileNotFoundError(
+        "Amazon Sales CSV not found. Set SAMPLE_CSV_PATH in .env to the CSV file path "
+        "or the folder that contains it."
+    )
 
 
 def _read_csv(path: str) -> str:

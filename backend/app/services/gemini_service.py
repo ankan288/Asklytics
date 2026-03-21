@@ -22,14 +22,15 @@ Your job is to respond ONLY with a single valid JSON object — no markdown, no 
 The JSON must match this exact structure:
 {
   "dashboard_title": "Short descriptive title for the whole dashboard",
-  "sql": "A single read-only SELECT statement. Use only columns that exist in the schema.",
+  "sql": "A single read-only SELECT statement. Use AS aliases if generating new columns (e.g. bins or counts).",
   "charts": [
     {
       "id": "chart-1",
-      "type": "line | bar | pie | area | kpi",
+      "type": "line | bar | pie | area | kpi | scatter | heatmap | histogram",
       "title": "Chart title",
-      "x_key": "column name for x-axis or label",
-      "y_keys": ["one or more column names for values"],
+      "x_key": "exact column name or alias from your SQL for x-axis/label (for heatmap: x-axis category, for histogram: the bin/range name)",
+      "y_keys": ["exact column name(s) or alias(es) from your SQL for values (for heatmap: y-axis category, for histogram: the frequency/count)"],
+      "z_key": "column name for color intensity (ONLY required if type is heatmap)",
       "color_palette": ["#hex1", "#hex2"]
     }
   ],
@@ -37,11 +38,14 @@ The JSON must match this exact structure:
 }
 
 Chart type selection rules:
-- "line"  → time-series data, trends over time
-- "area"  → same as line but emphasise volume/cumulative totals
-- "bar"   → comparing values across categories
-- "pie"   → parts of a whole (use only if <= 7 categories)
-- "kpi"   → a single aggregated scalar number (no axis needed)
+- "line"      → time-series data, trends over time
+- "area"      → same as line but emphasise volume/cumulative totals
+- "bar"       → comparing values across categories
+- "pie"       → parts of a whole (use only if <= 7 categories)
+- "kpi"       → a single aggregated scalar number (no axis needed)
+- "scatter"   → showing correlation or distribution between two numerical variables
+- "heatmap"   → showing intensity/density of a metric across two categorical variables
+- "histogram" → showing frequency distribution of a single numerical variable (group data into bins or ranges in SQL)
 
 You may return multiple chart objects if the question has multiple angles.
 
@@ -49,9 +53,9 @@ If the question CANNOT be answered from the available schema, return ONLY:
 { "error": "Clear explanation of why the question cannot be answered from this data." }
 
 RULES:
-- NEVER fabricate data or column names that do not exist in the schema.
+- NEVER fabricate data or column names that do not exist in the schema (unless generating bins or aggregates using AS).
 - NEVER return INSERT, UPDATE, DELETE, DROP, or any non-SELECT SQL.
-- ALWAYS use column names from the provided schema exactly as listed.
+- For existing fields, use schema column names exactly as listed. For calculated fields, use the exact AS alias defined in your SQL.
 - Use the COLUMN STATS section to understand valid value ranges — do not use values outside those ranges.
 - Keep SQL compatible with SQLite syntax.
 - For time-series, use strftime('%Y-%m', order_date) to group by month."""

@@ -2,6 +2,9 @@ import { BarChartWidget } from "./BarChartWidget";
 import { LineChartWidget } from "./LineChartWidget";
 import { PieChartWidget } from "./PieChartWidget";
 import { AreaChartWidget } from "./AreaChartWidget";
+import { ScatterChartWidget } from "./ScatterChartWidget";
+import { HeatMapChartWidget } from "./HeatMapChartWidget";
+import { HistogramChartWidget } from "./HistogramChartWidget";
 import { KPICard } from "./KPICard";
 import { BarChart2 } from "lucide-react";
 import type { ChartSpec } from "@/lib/types";
@@ -12,6 +15,9 @@ const WIDGETS = {
   pie: PieChartWidget,
   area: AreaChartWidget,
   kpi: KPICard,
+  scatter: ScatterChartWidget,
+  heatmap: HeatMapChartWidget,
+  histogram: HistogramChartWidget,
 } as const;
 
 // Decode HTML entities like &amp; -> &

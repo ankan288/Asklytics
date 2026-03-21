@@ -23,7 +23,9 @@ def query(body: QueryRequest):
     try:
         schema = schema_service.get_compact_schema(body.datasource_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        if body.datasource_id != "default":
+            return DashboardResponse(error="This dataset is no longer available in memory (the dev server may have restarted). Please re-upload your CSV file.")
+        return DashboardResponse(error=str(e))
 
     # 3. Stage 1 — generate SQL + chart specs (no insight yet)
     try:
@@ -76,6 +78,7 @@ def query(body: QueryRequest):
             data=chart_data,
             x_key=c.get("x_key"),
             y_keys=c.get("y_keys", []),
+            z_key=c.get("z_key"),
             color_palette=c.get("color_palette", []),
         ))
 
