@@ -22,13 +22,13 @@ class Settings(BaseSettings):
     # Supabase Authentication
     supabase_url: str = ""
     supabase_key: str = ""  # Service role key for backend
-    supabase_jwt_secret: str = ""
+    supabase_jwt_secret: str = "asklytics-dev-jwt-secret-key-32chars-min"
 
     # Supabase Storage for file uploads
     supabase_storage_bucket: str = "csv-uploads"
 
     # JWT (for token generation/validation)
-    jwt_secret: str = ""
+    jwt_secret: str = "asklytics-dev-jwt-secret-key-32chars-min"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60
     jwt_refresh_token_expire_days: int = 7

@@ -105,16 +105,20 @@ def _parse_response(text: str) -> dict:
 
 
 def _call_groq(system: str, message: str) -> str:
-    """Free fallback: Call Groq API (OpenAI-compatible, completely free)."""
-    from openai import OpenAI
+    """Free fallback: Call Groq API using native Groq client with openai fallback."""
     settings = get_settings()
     if not settings.groq_api_key:
         raise ValueError("GROQ_API_KEY is not set in .env")
 
-    client = OpenAI(
-        api_key=settings.groq_api_key,
-        base_url="https://api.groq.com/openai/v1"
-    )
+    try:
+        from groq import Groq
+        client = Groq(api_key=settings.groq_api_key)
+    except ImportError:
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=settings.groq_api_key,
+            base_url="https://api.groq.com/openai/v1"
+        )
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
