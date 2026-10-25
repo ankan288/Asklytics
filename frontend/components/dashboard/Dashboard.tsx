@@ -1,7 +1,8 @@
 "use client";
 import { motion, type Variants } from "framer-motion";
 import { ChartCard } from "./ChartCard";
-import { Lightbulb, Code2, Sparkles } from "lucide-react";
+import { AuditDrawer } from "./AuditDrawer";
+import { Lightbulb, Sparkles } from "lucide-react";
 import type { DashboardResponse } from "@/lib/types";
 
 interface Props {
@@ -74,18 +75,10 @@ export function Dashboard({ dashboard, showSQL = false, onSuggestionClick }: Pro
         </div>
       )}
 
-      {/* SQL disclosure */}
-      {showSQL && dashboard.sql && (
-        <motion.details variants={fadeUp} className="group">
-          <summary className="flex items-center gap-1.5 text-slate-600 text-xs cursor-pointer hover:text-slate-400 select-none w-fit">
-            <Code2 size={12} />
-            View generated SQL
-          </summary>
-          <pre className="mt-2 bg-slate-900 border border-slate-800 rounded-lg p-4 text-slate-400 text-xs overflow-x-auto leading-relaxed">
-            {dashboard.sql}
-          </pre>
-        </motion.details>
-      )}
+      {/* "How I Got This" Audit Drawer (Upgrade #7: Trust, Verification & Telemetry) */}
+      <motion.div variants={fadeUp}>
+        <AuditDrawer audit={dashboard.audit} rawSql={dashboard.sql} />
+      </motion.div>
 
       {/* AI-suggested follow-up questions */}
       {onSuggestionClick && dashboard.follow_up_suggestions && dashboard.follow_up_suggestions.length > 0 && (

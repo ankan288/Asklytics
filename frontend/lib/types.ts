@@ -9,6 +9,34 @@ export interface ChartSpec {
   color_palette: string[];
 }
 
+export interface ClaimItem {
+  claim_text: string;
+  claimed_value: string;
+  matched_value?: number | null;
+  status: "VERIFIED" | "UNVERIFIED" | "CONTRADICTION";
+  explanation: string;
+}
+
+export interface VerificationResult {
+  verified: boolean;
+  verification_rate: number;
+  claims_total: number;
+  claims_verified: number;
+  claims: ClaimItem[];
+  verified_summary: string;
+  badge: string;
+}
+
+export interface AuditMetadata {
+  sanitized_sql?: string;
+  execution_time_ms: number;
+  rows_scanned: number;
+  is_read_only: boolean;
+  confidence_score?: number;
+  assumptions?: string[];
+  verification?: VerificationResult;
+}
+
 export interface DashboardResponse {
   sql?: string;
   dashboard_title: string;
@@ -16,6 +44,7 @@ export interface DashboardResponse {
   insight_summary: string;
   data_limitations?: string;
   follow_up_suggestions?: string[];
+  audit?: AuditMetadata;
   error?: string;
 }
 
