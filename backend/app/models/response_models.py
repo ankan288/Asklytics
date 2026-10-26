@@ -26,9 +26,20 @@ class VerificationResult(BaseModel):
     verification_rate: float = 1.0
     claims_total: int = 0
     claims_verified: int = 0
+    claims_contradictions: int = 0
+    claims_unverified: int = 0
     claims: List[ClaimItem] = []
     verified_summary: str = ""
     badge: str = ""
+
+
+class ConsensusData(BaseModel):
+    agreement_score: float = 1.0
+    status: str = "CONSENSUS_REACHED"
+    primary_model: str = "Gemini 2.0 Flash"
+    secondary_model: Optional[str] = None
+    differences: List[str] = []
+    comparison_summary: str = ""
 
 
 class AuditMetadata(BaseModel):
@@ -38,7 +49,22 @@ class AuditMetadata(BaseModel):
     is_read_only: bool = True
     confidence_score: float = 0.95
     assumptions: List[str] = []
+    chart_corrections: List[str] = []
     verification: Optional[VerificationResult] = None
+    consensus: Optional[ConsensusData] = None
+
+
+class ClarificationOption(BaseModel):
+    label: str
+    subtext: str
+    refined_prompt: str
+
+
+class ClarificationPayload(BaseModel):
+    is_ambiguous: bool = True
+    matched_term: str = ""
+    question: str = ""
+    options: List[ClarificationOption] = []
 
 
 class DashboardResponse(BaseModel):
@@ -49,6 +75,7 @@ class DashboardResponse(BaseModel):
     data_limitations: Optional[str] = None
     follow_up_suggestions: List[str] = []
     audit: Optional[AuditMetadata] = None
+    clarification: Optional[ClarificationPayload] = None
     error: Optional[str] = None
 
 

@@ -81,6 +81,19 @@ export default function DashboardPage() {
               timestamp: new Date(),
             },
           ]);
+        } else if (result.clarification) {
+          // Ambiguity detected — prompt user with interactive clarification chips
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: uuidv4(),
+              role: "assistant",
+              content: result.clarification!.question,
+              clarification: result.clarification,
+              timestamp: new Date(),
+            },
+          ]);
+          showToast("Disambiguation options generated", "info");
         } else {
           // Add new dashboard to array (keep previous ones)
           setDashboards((prev) => [...prev, result]);
@@ -276,7 +289,7 @@ export default function DashboardPage() {
                 </motion.div>
               )}
 
-              <ChatHistory messages={messages} isLoading={isLoading} />
+              <ChatHistory messages={messages} isLoading={isLoading} onSelectOption={handleSend} />
 
               <ChatInput
                 onSend={handleSend}

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "eval-01",
+    "category": "aggregation",
+    "question": "What is the total revenue across all sales?",
+    "gold_sql": "SELECT SUM(total_revenue) AS total_revenue FROM amazon_sales;"
+  },
+  {
+    "id": "eval-02",
+    "category": "aggregation",
+    "question": "What is the average customer rating for all products?",
+    "gold_sql": "SELECT ROUND(AVG(rating), 2) AS average_rating FROM amazon_sales;"
+  },
+  {
+    "id": "eval-03",
+    "category": "aggregation",
+    "question": "How many total items or units were sold in total?",
+    "gold_sql": "SELECT SUM(quantity_sold) AS total_units FROM amazon_sales;"
+  },
+  {
+    "id": "eval-04",
+    "category": "aggregation",
+    "question": "What is the total number of orders placed?",
+    "gold_sql": "SELECT COUNT(order_id) AS total_orders FROM amazon_sales;"
+  },
+  {
+    "id": "eval-05",
+    "category": "grouping",
+    "question": "Show total revenue by product category.",
+    "gold_sql": "SELECT product_category, SUM(total_revenue) AS total_revenue FROM amazon_sales GROUP BY product_category ORDER BY total_revenue DESC;"
+  },
+  {
+    "id": "eval-06",
+    "category": "grouping",
+    "question": "What is the total revenue by sales customer region?",
+    "gold_sql": "SELECT customer_region, SUM(total_revenue) AS total_revenue FROM amazon_sales GROUP BY customer_region ORDER BY total_revenue DESC;"
+  },
+  {
+    "id": "eval-07",
+    "category": "grouping",
+    "question": "Compare average rating by category.",
+    "gold_sql": "SELECT product_category, ROUND(AVG(rating), 2) AS avg_rating FROM amazon_sales GROUP BY product_category ORDER BY avg_rating DESC;"
+  },
+  {
+    "id": "eval-08",
+    "category": "grouping",
+    "question": "Break down quantity sold by payment method.",
+    "gold_sql": "SELECT payment_method, SUM(quantity_sold) AS total_units FROM amazon_sales GROUP BY payment_method ORDER BY total_units DESC;"
+  },
+  {
+    "id": "eval-09",
+    "category": "filtering",
+    "question": "What was the total revenue for Electronics category only?",
+    "gold_sql": "SELECT SUM(total_revenue) AS electronics_revenue FROM amazon_sales WHERE product_category = 'Electronics';"
+  },
+  {
+    "id": "eval-10",
+    "category": "filtering",
+    "question": "What was the total revenue generated in the Europe region?",
+    "gold_sql": "SELECT SUM(total_revenue) AS europe_revenue FROM amazon_sales WHERE customer_region = 'Europe';"
+  },
+  {
+    "id": "eval-11",
+    "category": "filtering",
+    "question": "Show all orders with a rating of 5.",
+    "gold_sql": "SELECT order_id, product_id, product_category, total_revenue FROM amazon_sales WHERE rating = 5 LIMIT 1000;"
+  },
+  {
+    "id": "eval-12",
+    "category": "ordering",
+    "question": "What are the top 5 highest revenue categories?",
+    "gold_sql": "SELECT product_category, SUM(total_revenue) AS total_revenue FROM amazon_sales GROUP BY product_category ORDER BY total_revenue DESC LIMIT 5;"
+  },
+  {
+    "id": "eval-13",
+    "category": "ordering",
+    "question": "What are the bottom 3 categories by total sales?",
+    "gold_sql": "SELECT product_category, SUM(total_revenue) AS total_revenue FROM amazon_sales GROUP BY product_category ORDER BY total_revenue ASC LIMIT 3;"
+  },
+  {
+    "id": "eval-14",
+    "category": "cte",
+    "question": "Calculate regional revenue share compared to total using CTE.",
+    "gold_sql": "WITH total AS (SELECT SUM(total_revenue) AS grand_total FROM amazon_sales) SELECT customer_region, SUM(total_revenue) AS region_rev, ROUND(SUM(total_revenue) * 100.0 / total.grand_total, 2) AS pct_share FROM amazon_sales, total GROUP BY customer_region ORDER BY region_rev DESC;"
+  },
+  {
+    "id": "eval-15",
+    "category": "multi_metric",
+    "question": "Summarize revenue, total quantity, and average rating for each customer region.",
+    "gold_sql": "SELECT customer_region, SUM(total_revenue) AS revenue, SUM(quantity_sold) AS units, ROUND(AVG(rating), 2) AS avg_rating FROM amazon_sales GROUP BY customer_region ORDER BY revenue DESC;"
+  }
+]

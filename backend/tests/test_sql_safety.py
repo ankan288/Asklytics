@@ -53,3 +53,28 @@ def test_preserves_smaller_limit():
     sql = "SELECT * FROM amazon_sales LIMIT 5"
     sanitized, _ = validate_and_sanitize_sql(sql, "default")
     assert "LIMIT 5" in sanitized
+
+
+def test_allows_valid_with_cte_query():
+    sql = (
+        "WITH regional_summary AS ("
+        "  SELECT product_category, SUM(total_revenue) AS rev FROM amazon_sales GROUP BY product_category"
+        ") SELECT * FROM regional_summary"
+    )
+    sanitized, meta = validate_and_sanitize_sql(sql, "default")
+    assert "WITH" in sanitized
+    assert meta["has_with_cte"] is True
+
+
+def test_blocks_forbidden_functions():
+    with pytest.raises(PermissionError):
+        validate_and_sanitize_sql("SELECT load_extension('exploit.so') FROM amazon_sales", "default")
+
+    with pytest.raises(PermissionError):
+        validate_and_sanitize_sql("SELECT randomblob(1000000000) FROM amazon_sales", "default")
+
+
+def test_blocks_unwhitelisted_column():
+    with pytest.raises(PermissionError) as exc:
+        validate_and_sanitize_sql("SELECT non_existent_secret_column FROM amazon_sales", "default")
+    assert "does not exist in allowed tables" in str(exc.value)

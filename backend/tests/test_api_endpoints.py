@@ -120,3 +120,21 @@ def test_query_endpoint_handles_unanswerable_query(mock_dashboard):
     assert response.status_code == 200
     res_data = response.json()
     assert res_data["error"] == "The dataset does not contain weather data."
+
+
+def test_query_endpoint_intercepts_ambiguous_prompt():
+    session_res = client.post("/sessions", json={"datasource_id": "default"})
+    sid = session_res.json()["session_id"]
+
+    query_payload = {
+        "session_id": sid,
+        "prompt": "Show me the best category",
+        "datasource_id": "default",
+    }
+    response = client.post("/query", json=query_payload)
+    assert response.status_code == 200
+    res_data = response.json()
+    assert res_data["dashboard_title"] == "Clarification Needed"
+    assert res_data["clarification"] is not None
+    assert res_data["clarification"]["is_ambiguous"] is True
+    assert len(res_data["clarification"]["options"]) >= 3

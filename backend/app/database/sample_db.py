@@ -26,13 +26,13 @@ def _expand_csv_candidate(path: str) -> list[str]:
 
 def _find_csv() -> str:
     s = get_settings()
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     raw_candidates = [
         s.sample_csv_path,
-        os.path.join(project_root, "7. Amazon Sales", "Amazon Sales.csv"),
-        os.path.join(project_root, "7. Amazon Sales"),
+        os.path.join(repo_root, "data", "amazon_sales_sample.csv"),
         os.path.join(backend_root, "data", "amazon_sales.csv"),
+        os.path.join(repo_root, "7. Amazon Sales", "Amazon Sales.csv"),
     ]
 
     for raw in raw_candidates:

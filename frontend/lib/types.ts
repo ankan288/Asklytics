@@ -22,9 +22,20 @@ export interface VerificationResult {
   verification_rate: number;
   claims_total: number;
   claims_verified: number;
+  claims_contradictions?: number;
+  claims_unverified?: number;
   claims: ClaimItem[];
   verified_summary: string;
   badge: string;
+}
+
+export interface ConsensusData {
+  agreement_score: number;
+  status: "CONSENSUS_REACHED" | "DIVERGENCE_DETECTED" | "SINGLE_MODEL";
+  primary_model: string;
+  secondary_model?: string;
+  differences: string[];
+  comparison_summary: string;
 }
 
 export interface AuditMetadata {
@@ -34,7 +45,22 @@ export interface AuditMetadata {
   is_read_only: boolean;
   confidence_score?: number;
   assumptions?: string[];
+  chart_corrections?: string[];
   verification?: VerificationResult;
+  consensus?: ConsensusData;
+}
+
+export interface ClarificationOption {
+  label: string;
+  subtext: string;
+  refined_prompt: string;
+}
+
+export interface ClarificationPayload {
+  is_ambiguous: boolean;
+  matched_term: string;
+  question: string;
+  options: ClarificationOption[];
 }
 
 export interface DashboardResponse {
@@ -45,6 +71,7 @@ export interface DashboardResponse {
   data_limitations?: string;
   follow_up_suggestions?: string[];
   audit?: AuditMetadata;
+  clarification?: ClarificationPayload;
   error?: string;
 }
 
@@ -63,6 +90,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   warning?: string;
+  clarification?: ClarificationPayload;
   timestamp: Date;
 }
 

@@ -7,9 +7,10 @@ import type { ChatMessage } from "@/lib/types";
 interface Props {
   messages: ChatMessage[];
   isLoading: boolean;
+  onSelectOption?: (prompt: string) => void;
 }
 
-export function ChatHistory({ messages, isLoading }: Props) {
+export function ChatHistory({ messages, isLoading, onSelectOption }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export function ChatHistory({ messages, isLoading }: Props) {
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-3">
       {messages.map((m) => (
-        <ChatBubble key={m.id} message={m} />
+        <ChatBubble key={m.id} message={m} onSelectOption={onSelectOption} />
       ))}
       {isLoading && (
         <div className="flex gap-2.5">

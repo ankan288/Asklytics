@@ -10,3 +10,4 @@ class QueryRequest(BaseModel):
     session_id: str
     prompt: str
     datasource_id: str = "default"
+    skip_disambiguation: bool = False
