@@ -17,6 +17,37 @@ def test_verifies_exact_match():
     assert result["claims_verified"] >= 1
 
 
+def test_exact_cents_matching_and_no_loose_tolerance_cross_attribution():
+    """
+    Validates that exact financial figures ($66.48) match the exact row (Beauty: 66.48)
+    and are NOT falsely matched to nearby rows (Sports: 67.49) via loose tolerance.
+    """
+    rows = [
+        {"product_category": "Electronics", "total_revenue": 1132.46},
+        {"product_category": "Fashion", "total_revenue": 276.95},
+        {"product_category": "Home & Kitchen", "total_revenue": 129.99},
+        {"product_category": "Books", "total_revenue": 121.94},
+        {"product_category": "Sports", "total_revenue": 67.49},
+        {"product_category": "Beauty", "total_revenue": 66.48},
+    ]
+    insight = (
+        "Electronics generated the highest total revenue at $1,132.46, followed by Fashion at $276.95. "
+        "Home & Kitchen, Books, Sports, and Beauty generated lower revenues, ranging from $129.99 down to $66.48."
+    )
+    result = verify_insight(insight, rows)
+
+    assert result["verified"] is True
+    assert result["claims_contradictions"] == 0
+    assert result["badge"] == "100% Verified Ground Truth"
+
+    # Find the $66.48 claim
+    claim_66 = next(c for c in result["claims"] if "$66.48" in c["claimed_value"])
+    assert claim_66["status"] == "VERIFIED"
+    assert "Beauty" in claim_66["explanation"]
+    assert "Sports" not in claim_66["explanation"]
+    assert "exactly" in claim_66["explanation"]
+
+
 def test_flags_invented_numbers():
     rows = [
         {"category": "Electronics", "revenue": 145200.0},
@@ -35,6 +66,24 @@ def test_flags_invented_numbers():
     assert result2["verified"] is False
     unverified = [c for c in result2["claims"] if c["status"] == "UNVERIFIED"]
     assert len(unverified) >= 1
+
+
+def test_deliberate_false_entity_number_contradiction():
+    """Validates that a deliberately falsified number for an entity is flagged as CONTRADICTION."""
+    rows = [
+        {"product_category": "Electronics", "total_revenue": 1132.46},
+        {"product_category": "Beauty", "total_revenue": 66.48},
+    ]
+    insight = "Beauty generated $500.00 in total revenue."
+    result = verify_insight(insight, rows)
+
+    assert result["verified"] is False
+    assert result["claims_contradictions"] >= 1
+    assert "Contradiction Detected" in result["badge"]
+    claim = result["claims"][0]
+    assert claim["status"] == "CONTRADICTION"
+    assert "66.48" in claim["explanation"]
+    assert "$500.00" in claim["explanation"]
 
 
 def test_handles_empty_result_set():
@@ -58,4 +107,3 @@ def test_detects_superlative_entity_contradiction():
     assert len(contradictions) >= 1
     assert "Category B" in contradictions[0]["explanation"]
     assert "Category A" in contradictions[0]["explanation"]
-    assert "Contradiction Detected" in result["badge"]

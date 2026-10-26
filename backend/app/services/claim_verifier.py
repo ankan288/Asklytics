@@ -1,8 +1,8 @@
 """Claim-Level Insight Verification Engine (ConDABench & InsightLens).
 Extracts entity-metric-value triplets, superlatives, and numerical claims from LLM prose,
 evaluates each against the raw query result set, and categorizes them as:
-  - VERIFIED: Assertions mathematically confirmed by the data
-  - CONTRADICTION: Assertions directly refuted by the data (wrong entity or wrong number)
+  - VERIFIED: Assertions mathematically confirmed by the data (exact financial precision or rounding match)
+  - CONTRADICTION: Assertions directly refuted by the data (wrong entity holding superlative or wrong entity number)
   - UNVERIFIED: Figures not found in the dataset or column stats
 """
 
@@ -19,7 +19,7 @@ _NUMBER_PATTERN = re.compile(
 )
 
 _SUPERLATIVES = {
-    "max": re.compile(r"\b(highest|maximum|top|most|peak|largest|greatest|best)\b", re.IGNORECASE),
+    "max": re.compile(r"\b(highest|maximum|top|peak|largest|greatest|best)\b", re.IGNORECASE),
     "min": re.compile(r"\b(lowest|minimum|bottom|least|smallest|worst)\b", re.IGNORECASE),
 }
 
@@ -70,7 +70,11 @@ def _extract_column_types(rows: List[Dict[str, Any]]) -> Tuple[List[str], List[s
     return categorical_cols, numerical_cols
 
 
-def _find_mentioned_entities(sentence: str, rows: List[Dict[str, Any]], cat_cols: List[str]) -> List[Tuple[str, str, Dict[str, Any]]]:
+def _find_mentioned_entities(
+    sentence: str,
+    rows: List[Dict[str, Any]],
+    cat_cols: List[str],
+) -> List[Tuple[str, str, Dict[str, Any]]]:
     """Finds entities in rows that are explicitly mentioned in the sentence.
     Returns list of (entity_value, column_name, row_dict)."""
     found = []
@@ -79,11 +83,15 @@ def _find_mentioned_entities(sentence: str, rows: List[Dict[str, Any]], cat_cols
     for r in rows:
         for c in cat_cols:
             val = r.get(c)
-            if val and isinstance(val, str) and len(val.strip()) > 1:
-                val_str = val.strip()
-                # Check for exact word or phrase match
-                pattern = r"\b" + re.escape(val_str.lower()) + r"\b"
-                if re.search(pattern, sentence_lower):
+            if val is not None and not isinstance(val, (int, float, bool)):
+                val_str = str(val).strip()
+                if not val_str:
+                    continue
+                patterns = [
+                    r"\b" + re.escape(val_str.lower()) + r"\b",
+                    r"\b" + re.escape(c.lower()) + r"\s+" + re.escape(val_str.lower()) + r"\b",
+                ]
+                if any(re.search(p, sentence_lower) for p in patterns):
                     found.append((val_str, c, r))
     # Deduplicate by entity value
     unique_found = {}
@@ -91,6 +99,30 @@ def _find_mentioned_entities(sentence: str, rows: List[Dict[str, Any]], cat_cols
         if ent not in unique_found:
             unique_found[ent] = (ent, col, r)
     return list(unique_found.values())
+
+
+def _find_superlative_target_entity(
+    sentence: str,
+    superlative_match: re.Match,
+    mentioned_entities: List[Tuple[str, str, Dict[str, Any]]],
+) -> Optional[Tuple[str, str, Dict[str, Any]]]:
+    """Finds the specific entity syntactically bound to the superlative term."""
+    sup_start = superlative_match.start()
+    sentence_lower = sentence.lower()
+    candidates = []
+    for ent_val, ent_col, ent_row in mentioned_entities:
+        ent_pos = sentence_lower.find(ent_val.lower())
+        if ent_pos != -1:
+            preceding_window = sentence_lower[max(0, ent_pos - 15):ent_pos]
+            # Exclude secondary entities in phrases like "followed by Fashion"
+            if any(marker in preceding_window for marker in ["followed by", "after", "second to", "next to", "compared to"]):
+                continue
+            distance = abs(ent_pos - sup_start)
+            candidates.append((distance, (ent_val, ent_col, ent_row)))
+    if candidates:
+        candidates.sort(key=lambda x: x[0])
+        return candidates[0][1]
+    return None
 
 
 def verify_insight(
@@ -175,8 +207,8 @@ def verify_insight(
 
     for sentence in sentences:
         mentioned_entities = _find_mentioned_entities(sentence, rows, cat_cols)
-        has_max = bool(_SUPERLATIVES["max"].search(sentence))
-        has_min = bool(_SUPERLATIVES["min"].search(sentence))
+        max_match = _SUPERLATIVES["max"].search(sentence)
+        min_match = _SUPERLATIVES["min"].search(sentence)
 
         # Extract numeric mentions in sentence
         number_matches = list(_NUMBER_PATTERN.finditer(sentence))
@@ -190,161 +222,158 @@ def verify_insight(
                 continue
             extracted_numbers.append((raw_text, num_val, is_pct))
 
-        # ── 1. Check Superlative Claim with Mentioned Entity ─────────────
-        if (has_max or has_min) and mentioned_entities and num_cols:
-            for ent_val, ent_col, ent_row in mentioned_entities:
+        # ── 1. Check Superlative Claim with Syntactically Bound Target ─────────────
+        if max_match and mentioned_entities and num_cols:
+            target = _find_superlative_target_entity(sentence, max_match, mentioned_entities)
+            if target:
+                ent_val, ent_col, ent_row = target
                 for nc in num_cols:
                     if nc not in col_stats:
                         continue
                     stats = col_stats[nc]
                     actual_entity_val = float(str(ent_row.get(nc, 0)).replace(",", "").replace("$", ""))
+                    max_val = stats["max_val"]
+                    max_row = stats["max_row"]
+                    max_ent_val = max_row.get(ent_col, "another entity")
 
-                    if has_max:
-                        max_val = stats["max_val"]
-                        max_row = stats["max_row"]
-                        max_ent_val = max_row.get(ent_col, "another entity")
+                    if abs(actual_entity_val - max_val) > 0.01:
+                        claims.append({
+                            "claim_text": sentence,
+                            "claimed_value": f"{ent_val} is highest",
+                            "matched_value": actual_entity_val,
+                            "status": "CONTRADICTION",
+                            "explanation": (
+                                f"Contradiction: '{ent_val}' has {nc} of {actual_entity_val:,.2f}, "
+                                f"but the actual highest is '{max_ent_val}' with {max_val:,.2f}."
+                            ),
+                        })
+                    else:
+                        claims.append({
+                            "claim_text": sentence,
+                            "claimed_value": f"{ent_val} is highest",
+                            "matched_value": actual_entity_val,
+                            "status": "VERIFIED",
+                            "explanation": f"Verified: '{ent_val}' holds the maximum {nc} ({actual_entity_val:,.2f}).",
+                        })
 
-                        # Does the mentioned entity actually have the maximum?
-                        if abs(actual_entity_val - max_val) > 0.01:
-                            claims.append({
-                                "claim_text": sentence,
-                                "claimed_value": f"{ent_val} is highest",
-                                "matched_value": actual_entity_val,
-                                "status": "CONTRADICTION",
-                                "explanation": (
-                                    f"Contradiction: '{ent_val}' has {nc} of {actual_entity_val:,.2f}, "
-                                    f"but the actual highest is '{max_ent_val}' with {max_val:,.2f}."
-                                ),
-                            })
-                        else:
-                            claims.append({
-                                "claim_text": sentence,
-                                "claimed_value": f"{ent_val} is highest",
-                                "matched_value": actual_entity_val,
-                                "status": "VERIFIED",
-                                "explanation": f"Verified: '{ent_val}' holds the maximum {nc} ({actual_entity_val:,.2f}).",
-                            })
+        if min_match and mentioned_entities and num_cols:
+            target = _find_superlative_target_entity(sentence, min_match, mentioned_entities)
+            if target:
+                ent_val, ent_col, ent_row = target
+                for nc in num_cols:
+                    if nc not in col_stats:
+                        continue
+                    stats = col_stats[nc]
+                    actual_entity_val = float(str(ent_row.get(nc, 0)).replace(",", "").replace("$", ""))
+                    min_val = stats["min_val"]
+                    min_row = stats["min_row"]
+                    min_ent_val = min_row.get(ent_col, "another entity")
 
-                    elif has_min:
-                        min_val = stats["min_val"]
-                        min_row = stats["min_row"]
-                        min_ent_val = min_row.get(ent_col, "another entity")
+                    if abs(actual_entity_val - min_val) > 0.01:
+                        claims.append({
+                            "claim_text": sentence,
+                            "claimed_value": f"{ent_val} is lowest",
+                            "matched_value": actual_entity_val,
+                            "status": "CONTRADICTION",
+                            "explanation": (
+                                f"Contradiction: '{ent_val}' has {nc} of {actual_entity_val:,.2f}, "
+                                f"but the actual lowest is '{min_ent_val}' with {min_val:,.2f}."
+                            ),
+                        })
+                    else:
+                        claims.append({
+                            "claim_text": sentence,
+                            "claimed_value": f"{ent_val} is lowest",
+                            "matched_value": actual_entity_val,
+                            "status": "VERIFIED",
+                            "explanation": f"Verified: '{ent_val}' holds the minimum {nc} ({actual_entity_val:,.2f}).",
+                        })
 
-                        if abs(actual_entity_val - min_val) > 0.01:
-                            claims.append({
-                                "claim_text": sentence,
-                                "claimed_value": f"{ent_val} is lowest",
-                                "matched_value": actual_entity_val,
-                                "status": "CONTRADICTION",
-                                "explanation": (
-                                    f"Contradiction: '{ent_val}' has {nc} of {actual_entity_val:,.2f}, "
-                                    f"but the actual lowest is '{min_ent_val}' with {min_val:,.2f}."
-                                ),
-                            })
-                        else:
-                            claims.append({
-                                "claim_text": sentence,
-                                "claimed_value": f"{ent_val} is lowest",
-                                "matched_value": actual_entity_val,
-                                "status": "VERIFIED",
-                                "explanation": f"Verified: '{ent_val}' holds the minimum {nc} ({actual_entity_val:,.2f}).",
-                            })
+        # ── 2. Check Explicit Numbers Against Candidates with Best Match & Financial Precision ──
+        is_approx_sentence = bool(re.search(r"\b(about|approx|approximately|around|nearly|roughly|~)\b", sentence, re.I))
 
-        # ── 2. Check Explicit Numbers Against Entities and Data ──────────
         for raw_text, val, is_pct in extracted_numbers:
-            matched = False
-            is_contradiction = False
-            best_match_val = None
-            explanation = ""
+            has_explicit_cents = "." in raw_text and re.search(r"\.\d{2}\b", raw_text) is not None
+            is_approx_number = is_approx_sentence or bool(re.search(r"[kmb%]|thousand|million|billion", raw_text, re.I))
 
-            # Check if number was cited for a specific mentioned entity
-            if mentioned_entities and not is_pct:
-                for ent_val, ent_col, ent_row in mentioned_entities:
-                    for nc in num_cols:
-                        try:
-                            actual_v = float(str(ent_row.get(nc, 0)).replace(",", "").replace("$", ""))
-                        except ValueError:
-                            continue
-                        if abs(actual_v - val) / (abs(actual_v) if actual_v != 0 else 1.0) <= 0.03:
-                            matched = True
-                            best_match_val = actual_v
-                            explanation = f"Matches '{ent_val}' {nc} ({actual_v:,.2f}) within 3% tolerance."
-                            break
-                        elif val > 0 and actual_v > 0 and abs(actual_v - val) > 0.05 * actual_v:
-                            # Cited a completely wrong number for this entity
-                            is_contradiction = True
-                            explanation = f"Contradiction: '{ent_val}' {nc} is actually {actual_v:,.2f}, not {raw_text}."
-                    if matched:
-                        is_contradiction = False
-                        break
+            # Compile all candidate numbers from dataset rows, entity records, and aggregates
+            candidates: List[Tuple[float, str, bool, Optional[str]]] = []  # (value, desc, is_entity, ent_name)
+            for ent_val, ent_col, ent_row in mentioned_entities:
+                for nc in num_cols:
+                    try:
+                        ev = float(str(ent_row.get(nc, 0)).replace(",", "").replace("$", ""))
+                        candidates.append((ev, f"'{ent_val}' {nc}", True, ent_val))
+                    except ValueError:
+                        pass
 
-            # If not matched to entity, check against all numbers in result set
-            if not matched and not is_contradiction:
-                for nc, stats in col_stats.items():
-                    for v in stats["values"]:
-                        if v != 0 and abs(v - val) / abs(v) <= 0.03:
-                            matched = True
-                            best_match_val = v
-                            explanation = f"Matches row data in column '{nc}' ({v:,.2f})."
-                            break
-                    if matched:
-                        break
+            for nc, stats in col_stats.items():
+                for v in stats["values"]:
+                    candidates.append((v, f"column '{nc}'", False, None))
+                if stats["sum"] > 0:
+                    candidates.append((stats["sum"], f"total SUM of '{nc}'", False, None))
+                if stats["avg"] > 0:
+                    candidates.append((stats["avg"], f"average of '{nc}'", False, None))
 
-            # Check against aggregates (SUM, AVG, COUNT)
-            if not matched and not is_contradiction:
-                for nc, stats in col_stats.items():
-                    total = stats["sum"]
-                    avg = stats["avg"]
-                    if total > 0 and abs(total - val) / total <= 0.03:
-                        matched = True
-                        best_match_val = total
-                        explanation = f"Matches total SUM of '{nc}' ({total:,.2f})."
-                        break
-                    elif avg > 0 and abs(avg - val) / avg <= 0.03:
-                        matched = True
-                        best_match_val = avg
-                        explanation = f"Matches average of '{nc}' ({avg:,.2f})."
-                        break
+            # Score each candidate: find exact matches and close matches
+            exact_matches = []
+            close_matches = []
+            for cv, cdesc, is_ent, ent_name in candidates:
+                abs_diff = abs(cv - val)
+                rel_diff = abs_diff / abs(cv) if cv != 0 else 1.0
+                if abs_diff <= 0.01:
+                    exact_matches.append((abs_diff, cv, cdesc, ent_name))
+                elif not has_explicit_cents and is_approx_number and rel_diff <= 0.025:
+                    close_matches.append((rel_diff, cv, cdesc, ent_name))
 
-            # Check percentage assertions
-            if not matched and is_pct:
-                for nc, stats in col_stats.items():
-                    total = stats["sum"]
-                    if total > 0:
-                        for row_v in stats["values"]:
-                            calc_pct = (row_v / total) * 100
-                            if abs(calc_pct - val) <= 2.5:
-                                matched = True
-                                best_match_val = calc_pct
-                                explanation = f"Matches percentage of total for '{nc}' ({calc_pct:.1f}%)."
-                                break
-                    if matched:
-                        break
-
-            if matched:
+            if exact_matches:
+                # Prioritize entity matches and lowest absolute difference
+                exact_matches.sort(key=lambda x: (0 if x[3] else 1, x[0]))
+                best = exact_matches[0]
                 claims.append({
                     "claim_text": sentence,
                     "claimed_value": raw_text,
-                    "matched_value": best_match_val,
+                    "matched_value": best[1],
                     "status": "VERIFIED",
-                    "explanation": explanation,
+                    "explanation": f"Matches {best[2]} ({best[1]:,.2f}) exactly.",
                 })
-            elif is_contradiction:
+            elif close_matches:
+                close_matches.sort(key=lambda x: (0 if x[3] else 1, x[0]))
+                best = close_matches[0]
                 claims.append({
                     "claim_text": sentence,
                     "claimed_value": raw_text,
-                    "matched_value": None,
-                    "status": "CONTRADICTION",
-                    "explanation": explanation,
+                    "matched_value": best[1],
+                    "status": "VERIFIED",
+                    "explanation": f"Matches {best[2]} ({best[1]:,.2f}) within rounding tolerance ({best[0]*100:.1f}%).",
                 })
             else:
-                claims.append({
-                    "claim_text": sentence,
-                    "claimed_value": raw_text,
-                    "matched_value": None,
-                    "status": "UNVERIFIED",
-                    "explanation": f"Figure '{raw_text}' not found in query results or column statistics.",
-                })
+                # Check for direct entity contradiction: did prose cite this number for a single mentioned entity?
+                found_contradiction = False
+                for ent_val, ent_col, ent_row in mentioned_entities:
+                    for nc in num_cols:
+                        ev = float(str(ent_row.get(nc, 0)).replace(",", "").replace("$", ""))
+                        if abs(ev - val) > 0.05 * (ev if ev != 0 else 1.0) and ent_val.lower() in sentence.lower():
+                            if len(mentioned_entities) == 1:
+                                claims.append({
+                                    "claim_text": sentence,
+                                    "claimed_value": raw_text,
+                                    "matched_value": None,
+                                    "status": "CONTRADICTION",
+                                    "explanation": f"Contradiction: '{ent_val}' {nc} is actually {ev:,.2f}, not {raw_text}.",
+                                })
+                                found_contradiction = True
+                                break
+                    if found_contradiction:
+                        break
+
+                if not found_contradiction:
+                    claims.append({
+                        "claim_text": sentence,
+                        "claimed_value": raw_text,
+                        "matched_value": None,
+                        "status": "UNVERIFIED",
+                        "explanation": f"Figure '{raw_text}' not found in query results or column statistics.",
+                    })
 
     # Summary calculations
     total_claims = len(claims)
