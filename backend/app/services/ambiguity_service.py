@@ -1,5 +1,5 @@
 """Ambiguity Detection & Disambiguation Service (AmbiSQL & Sphinteract).
-Detects underspecified, polysemic business phrasing (e.g., 'best category', 'top region', 'sales performance')
+Detects underspecified, polysemic business phrasing (e.g., 'best category', 'top region', 'recent sales')
 and generates multi-choice clarification chips before executing unintended SQL."""
 
 import re
@@ -9,8 +9,11 @@ from typing import Dict, List, Optional, Any
 # Rules for detecting underspecified or polysemic terminology
 AMBIGUITY_PATTERNS = [
     {
-        "pattern": re.compile(r"\b(best|top|greatest|leading)\s+(product|category|category|item)\b", re.IGNORECASE),
-        "excluded": re.compile(r"\b(by|based on|in terms of|revenue|rating|sales|units|quantity)\b", re.IGNORECASE),
+        "pattern": re.compile(
+            r"\b(best|top|greatest|leading)\s+(?:product\s+)?(category|categories|item|items|product|products)\b|\b(category|categories|product|products)\b.*?\b(best|top|leading|greatest)\b",
+            re.IGNORECASE,
+        ),
+        "excluded": re.compile(r"\b(by|based on|in terms of|revenue|rating|sales|units|quantity|orders|profit)\b", re.IGNORECASE),
         "question": "How would you like to evaluate the 'best' category?",
         "options": [
             {
@@ -31,8 +34,11 @@ AMBIGUITY_PATTERNS = [
         ],
     },
     {
-        "pattern": re.compile(r"\b(top|best|leading)\s+(region|market|location)\b", re.IGNORECASE),
-        "excluded": re.compile(r"\b(by|revenue|sales|volume|orders|customers)\b", re.IGNORECASE),
+        "pattern": re.compile(
+            r"\b(top|best|leading|greatest)\s+(?:sales\s+)?(region|regions|market|markets|location|locations|territory)\b|\b(region|regions|market|markets|location)\b.*?\b(best|top|leading|greatest)\b",
+            re.IGNORECASE,
+        ),
+        "excluded": re.compile(r"\b(by|revenue|sales|volume|orders|customers|rating)\b", re.IGNORECASE),
         "question": "How would you like to measure top region?",
         "options": [
             {
@@ -53,8 +59,11 @@ AMBIGUITY_PATTERNS = [
         ],
     },
     {
-        "pattern": re.compile(r"\b(recent|latest)\s+(sales|transactions|orders|performance)\b", re.IGNORECASE),
-        "excluded": re.compile(r"\b(2022|2023|month|last\s+\d+|from|since)\b", re.IGNORECASE),
+        "pattern": re.compile(
+            r"\b(recent|latest|newest)\s+(?:amazon\s+)?(sales|transactions|orders|performance|purchases|records)\b|\b(show|give|display|get)\s+(?:me\s+)?(recent|latest)\b",
+            re.IGNORECASE,
+        ),
+        "excluded": re.compile(r"\b(2022|2023|month|last\s+\d+|from|since|between)\b", re.IGNORECASE),
         "question": "Which timeframe do you mean by 'recent'?",
         "options": [
             {
@@ -75,8 +84,11 @@ AMBIGUITY_PATTERNS = [
         ],
     },
     {
-        "pattern": re.compile(r"\b(payment\s+method\s+performance|performance\s+by\s+payment)\b", re.IGNORECASE),
-        "excluded": re.compile(r"\b(revenue|rating|volume|count)\b", re.IGNORECASE),
+        "pattern": re.compile(
+            r"\b(performance|trend)\s+by\s+(payment|payment\s+method|category|region)\b|\b(payment\s+method|payment)\s+performance\b",
+            re.IGNORECASE,
+        ),
+        "excluded": re.compile(r"\b(revenue|rating|volume|count|sales|units)\b", re.IGNORECASE),
         "question": "What metric defines 'performance' for payment methods?",
         "options": [
             {
