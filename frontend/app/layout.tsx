@@ -1,11 +1,31 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/Toast";
-import { AuthGuard } from "@/components/AuthGuard";
+import { CookieConsent } from "@/components/ui/CookieConsent";
+import { StickyMobileCTA } from "@/components/ui/StickyMobileCTA";
 
 export const metadata: Metadata = {
-  title: "Asklytics — Conversational Analytics Platform",
-  description: "Ask questions in plain English, get instant analytics dashboards powered by AI",
+  metadataBase: new URL("http://localhost:3000"),
+  title: {
+    default: "Asklytics — Verifiable Conversational BI & Analytics Platform",
+    template: "%s | Asklytics",
+  },
+  description: "Ask business questions in plain English, get AST-guarded SQL, mathematically verified insights, and interactive charts in seconds.",
+  keywords: [
+    "Conversational Analytics",
+    "Text to SQL",
+    "Business Intelligence",
+    "AI Dashboard",
+    "Data Analytics",
+    "Verified Insights",
+  ],
+  authors: [{ name: "Asklytics" }],
+  openGraph: {
+    title: "Asklytics — Verifiable Conversational BI & Analytics Platform",
+    description: "Ask business questions in plain English, get instant verified dashboards.",
+    siteName: "Asklytics",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -30,6 +50,8 @@ export default function RootLayout({
       <body>
         <ToastProvider>
           {children}
+          <StickyMobileCTA />
+          <CookieConsent />
         </ToastProvider>
       </body>
     </html>

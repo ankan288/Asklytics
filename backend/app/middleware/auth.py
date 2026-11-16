@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Routes that don't require authentication
 PUBLIC_ROUTES = {
+    "/",
     "/auth/register",
     "/auth/login",
     "/auth/refresh",
@@ -21,10 +22,6 @@ PUBLIC_ROUTES = {
     "/docs",
     "/openapi.json",
     "/redoc",
-    "/query",
-    "/sessions",  # Fixed: was /session, but router uses /sessions
-    "/upload",
-    "/conversations",  # Temporarily public until Supabase auth is fully configured
 }
 
 
@@ -43,7 +40,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Skip auth for public routes (check if path starts with any public route)
         path = request.url.path
         for public_route in PUBLIC_ROUTES:
-            if path == public_route or path.startswith(public_route + "/") or path.startswith(public_route + "?"):
+            if path == public_route or (public_route != "/" and path.startswith(public_route + "/")) or path.startswith(public_route + "?"):
                 return await call_next(request)
 
         # Skip auth for OPTIONS requests (CORS preflight)
@@ -58,12 +55,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
             logger.warning(f"Missing or invalid auth header for {request.url.path}")
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Missing or invalid authorization header"},
+                content={"detail": "Authentication required. Please log in to continue."},
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Extract token
-        token = auth_header[7:]  # Remove "Bearer " prefix
+        token = auth_header[7:].strip()  # Remove "Bearer " prefix
 
         try:
             settings = get_settings()
@@ -87,7 +84,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 logger.warning("Supabase token expired")
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"detail": "Token expired"},
+                    content={"detail": "Token expired. Please log in again."},
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             except jwt.InvalidTokenError as e:
@@ -99,7 +96,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
             if not user_id:
                 logger.warning("Invalid token - could not extract user_id")
-                raise ValueError("Invalid token format")
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"detail": "Invalid or expired token. Please log in again."},
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
             # Inject user_id into request state
             request.state.user_id = user_id
@@ -116,7 +117,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             logger.error(f"Unexpected auth error: {e}")
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"detail": "Authentication failed"},
+                content={"detail": "Authentication failed. Please log in again."},
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Process request

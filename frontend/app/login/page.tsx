@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { BarChart2, Mail, Lock, ArrowRight, AlertCircle } from "lucide-react";
+import { BarChart2, Mail, Lock, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -27,16 +27,18 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      router.push("/dashboard");
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const redirectUrl = params?.get("redirect") || "/dashboard";
+      router.push(redirectUrl);
     } catch (err: any) {
-      setError(err.message || "Login failed");
+      setError(err.message || "Login failed. Please verify your credentials.");
     }
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#050810] flex items-center justify-center">
+    <div className="relative min-h-screen w-full bg-[#050810] flex items-center justify-center py-12 px-4 overflow-y-auto">
       {/* Background */}
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0 pointer-events-none">
         <LightRays
           raysOrigin="top-center"
           raysColor="#ffffff"
@@ -58,10 +60,10 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative z-10 w-full max-w-md px-4"
+        className="relative z-10 w-full max-w-md my-auto"
       >
         <div
-          className="relative overflow-hidden rounded-3xl p-8"
+          className="relative overflow-hidden rounded-3xl p-6 sm:p-8"
           style={{
             background: "rgba(255, 255, 255, 0.04)",
             backdropFilter: "blur(48px) saturate(180%) brightness(1.08)",
@@ -81,30 +83,37 @@ export default function LoginPage() {
           />
 
           {/* Logo */}
-          <div className="relative flex items-center gap-2.5 mb-8">
+          <div className="relative flex items-center gap-2.5 mb-6 sm:mb-8">
             <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/20">
               <BarChart2 size={17} className="text-white" />
             </div>
             <span className="text-white/90 font-semibold text-sm">Asklytics</span>
           </div>
 
-          <h1 className="relative text-2xl font-bold text-white mb-1">Welcome back</h1>
-          <p className="relative text-white/50 text-sm mb-8">Sign in to your account to continue</p>
+          <h1 className="relative text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Welcome back</h1>
+          <p className="relative text-white/50 text-xs sm:text-sm mb-6 sm:mb-8">Sign in to your account to continue</p>
 
+          {/* Error Banner */}
           {error && (
-            <div className="relative mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-start gap-2">
-              <AlertCircle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
-              <p className="text-red-400 text-xs">{error}</p>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative mb-5 p-3.5 rounded-xl bg-red-500/15 border border-red-500/30 flex items-start gap-2.5 shadow-lg shadow-red-500/5"
+            >
+              <AlertCircle size={17} className="text-red-400 mt-0.5 flex-shrink-0" />
+              <p className="text-red-300 text-xs font-medium leading-relaxed">{error}</p>
+            </motion.div>
           )}
 
           <form onSubmit={handleSubmit} className="relative space-y-4">
             <div>
-              <label className="text-white/50 text-xs mb-1.5 block">Email</label>
+              <label className="text-white/60 text-xs mb-1.5 block font-medium">Email Address</label>
               <div className="relative">
-                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="email"
+                  required
+                  disabled={loading}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
@@ -114,17 +123,19 @@ export default function LoginPage() {
                     WebkitBackdropFilter: "blur(10px)",
                     backdropFilter: "blur(10px)",
                   }}
-                  className="w-full text-white placeholder-white/30 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-white/30 transition-colors"
+                  className="w-full text-white placeholder-white/30 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:border-indigo-400/50 transition-colors disabled:opacity-50"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-white/50 text-xs mb-1.5 block">Password</label>
+              <label className="text-white/60 text-xs mb-1.5 block font-medium">Password</label>
               <div className="relative">
-                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="password"
+                  required
+                  disabled={loading}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -134,7 +145,7 @@ export default function LoginPage() {
                     WebkitBackdropFilter: "blur(10px)",
                     backdropFilter: "blur(10px)",
                   }}
-                  className="w-full text-white placeholder-white/30 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-white/30 transition-colors"
+                  className="w-full text-white placeholder-white/30 rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:border-indigo-400/50 transition-colors disabled:opacity-50"
                 />
               </div>
             </div>
@@ -143,19 +154,28 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               style={{
-                background: loading ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.92)",
+                background: loading ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.92)",
                 boxShadow: "0 4px 20px rgba(255,255,255,0.15), inset 0 1px 0 rgba(255,255,255,0.8)",
               }}
-              className="w-full flex items-center justify-center gap-2 text-slate-900 font-semibold py-2.5 rounded-xl transition-all hover:bg-white text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 text-slate-900 font-semibold py-3 rounded-xl transition-all hover:bg-white text-sm mt-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {loading ? "Signing in..." : "Sign In"}
-              <ArrowRight size={15} />
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin text-slate-900" />
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight size={15} />
+                </>
+              )}
             </button>
           </form>
 
-          <p className="relative text-white/35 text-xs text-center mt-6">
+          <p className="relative text-white/40 text-xs text-center mt-6">
             Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-white/70 hover:text-white transition-colors">
+            <Link href="/register" className="text-indigo-300 hover:text-white font-medium transition-colors">
               Sign up
             </Link>
           </p>

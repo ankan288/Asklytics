@@ -2,37 +2,62 @@ import type { DashboardResponse, SessionResponse, UploadResponse, AuthResponse, 
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
-let authToken: string | null = null
+function getStoredToken(): string | null {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("asklytics_token") || localStorage.getItem("token") || null
+  }
+  return null
+}
+
+let authToken: string | null = getStoredToken()
 
 // Function to set the auth token (called from useAuth hook)
 export function setAuthToken(token: string | null) {
   authToken = token
+  if (typeof window !== "undefined") {
+    if (token) {
+      localStorage.setItem("asklytics_token", token)
+    } else {
+      localStorage.removeItem("asklytics_token")
+    }
+  }
 }
 
 export function getAuthToken(): string | null {
-  return authToken
+  return authToken || getStoredToken()
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = authToken || getStoredToken()
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>)
   }
 
-  // Add JWT token if available
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`
+  // Attach JWT token if available
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
-    headers,
     ...options,
+    headers,
   })
 
   // Handle 401 - token expired or invalid
   if (res.status === 401) {
     authToken = null
-    throw new Error("Unauthorized - please log in again")
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("asklytics_token")
+      localStorage.removeItem("asklytics_refresh_token")
+      localStorage.removeItem("asklytics_user")
+      
+      const pathname = window.location.pathname
+      if (pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) {
+        window.location.href = `/login?redirect=${encodeURIComponent(pathname)}`
+      }
+    }
+    throw new Error("Authentication required. Please log in.")
   }
 
   if (!res.ok) {
@@ -52,7 +77,7 @@ export async function login(data: LoginRequest): Promise<AuthResponse> {
     method: "POST",
     body: JSON.stringify(data),
   })
-  authToken = response.access_token
+  setAuthToken(response.access_token)
   return response
 }
 
@@ -61,7 +86,7 @@ export async function register(data: SignUpRequest): Promise<AuthResponse> {
     method: "POST",
     body: JSON.stringify(data),
   })
-  authToken = response.access_token
+  setAuthToken(response.access_token)
   return response
 }
 
@@ -70,7 +95,7 @@ export async function refreshToken(refresh_token: string): Promise<AuthResponse>
     method: "POST",
     body: JSON.stringify({ refresh_token }),
   })
-  authToken = response.access_token
+  setAuthToken(response.access_token)
   return response
 }
 
@@ -79,7 +104,12 @@ export async function getCurrentUser(): Promise<User> {
 }
 
 export function logoutApi(): void {
-  authToken = null
+  setAuthToken(null)
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("asklytics_token")
+    localStorage.removeItem("asklytics_refresh_token")
+    localStorage.removeItem("asklytics_user")
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -128,15 +158,15 @@ export async function addConversationTurn(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Session & Query API (existing)
+// Session & Query API
 // ─────────────────────────────────────────────────────────────
 
 export async function createSession(datasourceId = "default"): Promise<string> {
   const data = await apiFetch<SessionResponse>("/sessions", {
     method: "POST",
     body: JSON.stringify({ datasource_id: datasourceId }),
-  });
-  return data.session_id;
+  })
+  return data.session_id
 }
 
 export async function postQuery(
@@ -147,30 +177,41 @@ export async function postQuery(
   return apiFetch<DashboardResponse>("/query", {
     method: "POST",
     body: JSON.stringify({ session_id: sessionId, prompt, datasource_id: datasourceId }),
-  });
+  })
 }
 
 export async function uploadCsv(file: File): Promise<UploadResponse> {
-  const form = new FormData();
-  form.append("file", file);
+  const form = new FormData()
+  form.append("file", file)
 
-  const headers: Record<string, string> = {};
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
+  const token = authToken || getStoredToken()
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`
   }
 
   const res = await fetch(`${API_BASE}/upload/csv`, {
     method: "POST",
     body: form,
-    headers
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || `HTTP ${res.status}`);
+    headers,
+  })
+
+  if (res.status === 401) {
+    authToken = null
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("asklytics_token")
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`
+    }
+    throw new Error("Authentication required. Please log in.")
   }
-  return res.json() as Promise<UploadResponse>;
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(err || `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<UploadResponse>
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
-  await fetch(`${API_BASE}/sessions/${sessionId}`, { method: "DELETE" });
+  await apiFetch<void>(`/sessions/${sessionId}`, { method: "DELETE" })
 }

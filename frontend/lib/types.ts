@@ -98,9 +98,12 @@ export interface ChatMessage {
 export interface User {
   id: string;
   email: string;
+  role?: string;
   display_name?: string;
+  full_name?: string;
   avatar_url?: string;
   created_at?: string;
+  last_login?: string;
 }
 
 export interface AuthResponse {
@@ -120,6 +123,7 @@ export interface SignUpRequest {
   email: string;
   password: string;
   display_name?: string;
+  full_name?: string;
 }
 
 // Conversation history types

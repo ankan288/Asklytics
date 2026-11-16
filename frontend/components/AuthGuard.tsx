@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -14,17 +15,21 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!loading && !user && mounted) {
-      router.push('/login')
+    if (mounted && !loading && !user) {
+      const redirectUrl = pathname ? `/login?redirect=${encodeURIComponent(pathname)}` : '/login'
+      router.push(redirectUrl)
     }
-  }, [user, loading, mounted, router])
+  }, [user, loading, mounted, router, pathname])
 
   if (!mounted || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-400">Loading...</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#050810] text-white">
+        <div className="relative flex flex-col items-center">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mb-4 animate-pulse shadow-lg shadow-indigo-600/20">
+            <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <h2 className="text-sm font-semibold tracking-wide text-slate-200 mb-1">Checking Authentication</h2>
+          <p className="text-xs text-slate-400">Verifying session with Asklytics backend...</p>
         </div>
       </div>
     )

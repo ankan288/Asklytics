@@ -4,7 +4,7 @@ Complete Supabase-integrated schemas.
 """
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Union
 from uuid import UUID
 
 
@@ -55,10 +55,11 @@ class UserProfile(BaseModel):
     """User profile information (no password)."""
     id: str  # UUID as string for flexibility
     email: str
+    role: Optional[str] = "user"
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
-    created_at: datetime
-    last_login: Optional[datetime] = None
+    created_at: Union[datetime, str]
+    last_login: Optional[Union[datetime, str]] = None
 
     class Config:
         from_attributes = True

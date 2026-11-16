@@ -26,9 +26,16 @@ def init_auth_tables():
                 hashed_password TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP,
-                is_active BOOLEAN DEFAULT TRUE
+                is_active BOOLEAN DEFAULT TRUE,
+                role TEXT DEFAULT 'user'
             )
         """)
+        # Safe migration if table previously existed without role column
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+        except sqlite3.OperationalError:
+            pass
+
         logger.info("✓ users table ready")
 
         # ─── Sessions Table ─────────────────────────────────────────────────
@@ -115,30 +122,14 @@ def init_auth_tables():
 def cleanup_expired_sessions():
     """
     Delete expired sessions older than 7 days.
-    Should be called periodically (e.g., via cron or background job).
     """
     settings = get_settings()
     conn = sqlite3.connect(settings.db_path)
     cursor = conn.cursor()
-
     try:
         cursor.execute("""
-            DELETE FROM sessions
-            WHERE expires_at < datetime('now')
+            DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP
         """)
-        deleted = cursor.rowcount
         conn.commit()
-        logger.info(f"✓ Cleaned up {deleted} expired sessions")
-        return deleted
-    except Exception as e:
-        logger.error(f"❌ Error cleaning up sessions: {e}")
-        conn.rollback()
-        raise
     finally:
         conn.close()
-
-
-if __name__ == "__main__":
-    # Can be run directly for testing
-    init_auth_tables()
-    print("✅ Tables initialized")

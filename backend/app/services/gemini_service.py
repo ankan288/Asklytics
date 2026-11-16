@@ -1,5 +1,5 @@
 """LLM API integration — Stage 1: query planning, Stage 2: grounded insight.
-   Supports Gemini (primary) with Grok fallback on failure."""
+   Supports Gemini (primary) with Groq fallback on failure."""
 import json, logging, re
 import httpx
 from app.config import get_settings
@@ -120,15 +120,22 @@ def _call_groq(system: str, message: str) -> str:
             base_url="https://api.groq.com/openai/v1"
         )
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": message}
-        ],
-        temperature=0.1
-    )
-    return response.choices[0].message.content
+    last_err = None
+    for model_name in ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile"]:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": message}
+                ],
+                temperature=0.1
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            last_err = e
+            continue
+    raise last_err or RuntimeError("All Groq models failed")
 
 
 def _call_llm(system: str, message: str) -> str:
@@ -137,21 +144,22 @@ def _call_llm(system: str, message: str) -> str:
 
     # Try Gemini first
     if settings.gemini_api_key:
-        try:
-            from google import genai
-            from google.genai import types
-            client = genai.Client(api_key=settings.gemini_api_key)
-            response = client.models.generate_content(
-                model="gemini-2.0-flash-lite",
-                contents=message,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    temperature=0.1,
-                ),
-            )
-            return response.text
-        except Exception as e:
-            logger.warning(f"Gemini failed, switching to Groq fallback: {e}")
+        for model_name in ["gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-2.0-flash-lite"]:
+            try:
+                from google import genai
+                from google.genai import types
+                client = genai.Client(api_key=settings.gemini_api_key)
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=message,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system,
+                        temperature=0.1,
+                    ),
+                )
+                return response.text
+            except Exception as e:
+                logger.warning(f"Gemini {model_name} failed, trying next: {e}")
 
     # Fallback to Groq (free)
     if settings.groq_api_key:

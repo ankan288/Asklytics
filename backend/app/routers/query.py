@@ -21,6 +21,7 @@ from app.services import (
     consensus_service,
     claim_verifier,
 )
+from app.services.security import sanitize_error_message
 from app.services.supabase_service import create_conversation, add_conversation_turn
 import asyncio
 import time
@@ -54,9 +55,9 @@ def query(body: QueryRequest):
     except ValueError as e:
         if body.datasource_id != "default":
             return DashboardResponse(
-                error="This dataset is no longer available in memory (the dev server may have restarted). Please re-upload your CSV file."
+                error="This dataset is no longer available in memory (the server may have restarted). Please re-upload your CSV file."
             )
-        return DashboardResponse(error=str(e))
+        return DashboardResponse(error=sanitize_error_message(str(e)))
 
     # Enrich prompt with multi-turn state (Upgrade #5) and semantic standards (Upgrade #8)
     state_ctx = state_manager.build_state_prompt_context(body.session_id)
@@ -69,14 +70,16 @@ def query(body: QueryRequest):
     try:
         ai_response = gemini_service.generate_dashboard(schema, enriched_prompt, history)
     except ValueError as e:
-        return DashboardResponse(error=str(e))
+        return DashboardResponse(error=sanitize_error_message(str(e)))
     except Exception as e:
-        logger.error(f"Gemini error: {e}")
-        return DashboardResponse(error=f"AI service unavailable. Details: {str(e)}")
+        logger.error(f"AI Generation Error: {e}")
+        return DashboardResponse(
+            error="The AI analytics engine was unable to generate a valid query for this question. Please try rephrasing."
+        )
 
     # Handle AI "cannot answer" response
     if "error" in ai_response and len(ai_response) == 1:
-        return DashboardResponse(error=ai_response["error"])
+        return DashboardResponse(error=sanitize_error_message(ai_response["error"]))
 
     # 5. Execute SQL against the real database with AST safety & telemetry (Upgrade #4)
     sql = ai_response.get("sql", "")
@@ -87,7 +90,7 @@ def query(body: QueryRequest):
         return DashboardResponse(
             sql=sql,
             dashboard_title=ai_response.get("dashboard_title", ""),
-            error=str(e),
+            error=sanitize_error_message(str(e)),
         )
 
     # 6. Stage 2 — generate insight grounded in actual query results
@@ -138,15 +141,11 @@ def query(body: QueryRequest):
         [c.title for c in charts],
     )
 
-    # 10. Assemble Audit & Trust Metadata (Upgrade #7)
-    ast_meta = telemetry.get("ast_metadata", {})
+    # Build Stage 4 dynamic trust audit metadata
+    ast_meta = telemetry.get("ast_meta", {})
     dynamic_assumptions = []
-    if ast_meta.get("is_aggregate"):
-        dynamic_assumptions.append("Aggregated metrics across transaction records")
-    if ast_meta.get("has_group_by"):
-        dynamic_assumptions.append("Grouped results by categorical business dimensions")
-    if ast_meta.get("has_order_by"):
-        dynamic_assumptions.append("Applied deterministic sorting to surface primary rankings")
+    if ast_meta.get("has_window_function"):
+        dynamic_assumptions.append("Used SQL window functions for chronological/rank computation")
     if ast_meta.get("has_with_cte"):
         dynamic_assumptions.append("Synthesized query using Common Table Expressions (CTE)")
     if len(rows) >= 1000:

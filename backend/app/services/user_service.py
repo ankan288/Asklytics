@@ -1,12 +1,11 @@
 """
 User service - Basic user management for SQLite database.
-Minimal implementation for auth router compatibility.
 """
 import sqlite3
 import uuid
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from app.config import get_settings
 from app.services.auth_service import AuthService
 
@@ -25,19 +24,9 @@ class UserService:
         conn.row_factory = sqlite3.Row  # Enable column access by name
         return conn
 
-    def create_user(self, email: str, hashed_password: str) -> str:
+    def create_user(self, email: str, hashed_password: str, role: str = "user") -> str:
         """
-        Create a new user.
-
-        Args:
-            email: User email
-            hashed_password: Already hashed password
-
-        Returns:
-            user_id: UUID string
-
-        Raises:
-            ValueError: If email already exists
+        Create a new user with specified role.
         """
         user_id = str(uuid.uuid4())
 
@@ -45,11 +34,11 @@ class UserService:
         try:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO users (user_id, email, hashed_password, created_at)
-                VALUES (?, ?, ?, ?)
-            """, (user_id, email, hashed_password, datetime.utcnow().isoformat()))
+                INSERT INTO users (user_id, email, hashed_password, created_at, role)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, email.lower().strip(), hashed_password, datetime.utcnow().isoformat(), role))
             conn.commit()
-            logger.info(f"✓ User created: {user_id}")
+            logger.info(f"✓ User created: {user_id} with role {role}")
             return user_id
         except sqlite3.IntegrityError:
             raise ValueError("Email already registered")
@@ -64,7 +53,7 @@ class UserService:
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+            cursor.execute("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email.strip(),))
             row = cursor.fetchone()
             return dict(row) if row else None
         except Exception as e:
@@ -101,27 +90,51 @@ class UserService:
         finally:
             conn.close()
 
-    def create_session(self, user_id: str) -> Dict[str, str]:
-        """
-        Create session with JWT tokens.
-
-        Args:
-            user_id: UUID of user
-
-        Returns:
-            Dict with access_token, refresh_token, token_type, expires_in
-        """
+    def list_users(self, limit: int = 50) -> List[Dict]:
+        """List registered users without sensitive password hashes."""
+        conn = self._get_connection()
         try:
-            # Generate JWT tokens using AuthService
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT user_id, email, role, created_at, last_login, is_active
+                FROM users
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error listing users: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def update_user_role(self, user_id: str, new_role: str) -> bool:
+        """Update user role (e.g. 'user' or 'admin')."""
+        if new_role not in ["user", "admin"]:
+            raise ValueError("Role must be 'user' or 'admin'")
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE users SET role = ? WHERE user_id = ?
+            """, (new_role, user_id))
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def create_session(self, user_id: str) -> Dict[str, str]:
+        """Create session with JWT tokens."""
+        try:
             tokens = AuthService.create_tokens(user_id)
 
-            # Store session in database
             conn = self._get_connection()
             cursor = conn.cursor()
 
             session_id = str(uuid.uuid4())
             expires_at = datetime.utcnow()
-            expires_at = expires_at.replace(day=expires_at.day + 7)  # 7 days from now
+            expires_at = expires_at.replace(day=expires_at.day + 7)
 
             cursor.execute("""
                 INSERT INTO sessions (session_id, user_id, access_token, refresh_token, expires_at)

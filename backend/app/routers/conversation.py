@@ -4,7 +4,7 @@ Provides GET conversations list, GET single conversation, POST new conversation.
 """
 import logging
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from app.models.auth_models import Conversation, ConversationListItem, ConversationCreateRequest, ConversationTurnCreate
 from app.services.auth_service import AuthService
 from app.services.supabase_service import (
@@ -19,8 +19,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
-async def get_current_user_id(authorization: str = Header(None)) -> str:
-    """Extract user_id from JWT token."""
+async def get_current_user_id(request: Request, authorization: str = Header(None)) -> str:
+    """Extract user_id from request state (via AuthMiddleware) or JWT token header."""
+    user_id = getattr(request.state, "user_id", None)
+    if user_id:
+        return user_id
+
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing authorization header")
 

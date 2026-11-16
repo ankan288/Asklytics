@@ -2,7 +2,7 @@
 Authentication router - Login, signup, token refresh endpoints.
 """
 import logging
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request
 from app.models.auth_models import (
     SignUpRequest, LoginRequest, RefreshTokenRequest,
     TokenResponse, UserProfile, AuthResponse
@@ -58,6 +58,7 @@ async def register(request: SignUpRequest):
             user=UserProfile(
                 id=user["user_id"],
                 email=user["email"],
+                role=user.get("role", "user"),
                 created_at=user["created_at"],
                 last_login=user["last_login"]
             ),
@@ -127,6 +128,7 @@ async def login(request: LoginRequest):
             user=UserProfile(
                 id=user["user_id"],
                 email=user["email"],
+                role=user.get("role", "user"),
                 created_at=user["created_at"],
                 last_login=user["last_login"]
             ),
@@ -195,17 +197,23 @@ async def logout():
 
 
 @router.get("/me", response_model=UserProfile)
-async def get_current_user(user_id: str):
+async def get_current_user(request: Request):
     """
     Get current user info (requires valid access token in Authorization header).
-
-    Args:
-        user_id: From JWT token (injected by middleware)
-
-    Returns:
-        Current user info
     """
     user_service = UserService()
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        auth_header = request.headers.get("Authorization", "")
+        token = AuthService.extract_token_from_header(auth_header)
+        if token:
+            user_id = AuthService.verify_token(token, token_type="access")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
 
     try:
         user = user_service.get_user_by_id(user_id)
@@ -219,6 +227,7 @@ async def get_current_user(user_id: str):
         return UserProfile(
             id=user["user_id"],
             email=user["email"],
+            role=user.get("role", "user"),
             created_at=user["created_at"],
             last_login=user["last_login"]
         )
